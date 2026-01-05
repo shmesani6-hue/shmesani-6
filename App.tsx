@@ -1,53 +1,21 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { RefreshCcw, Moon, Sun, Globe, AlertCircle } from 'lucide-react';
-import { SUPPORTED_CURRENCIES, TRANSLATIONS, API_URL } from './constants';
-import { ExchangeRates, ExchangeRateApiResponse, Language, CurrencyCode } from './types';
+import React, { useState, useEffect } from 'react';
+import { RefreshCcw, Moon, Sun, Globe, AlertCircle, TrendingUp } from 'lucide-react';
+import { SUPPORTED_CURRENCIES } from './constants';
+import { Language } from './types';
 import CurrencyCard from './components/CurrencyCard';
+import { useCurrencyViewModel } from './hooks/useCurrencyViewModel';
 
 const App: React.FC = () => {
-  // --- UI State ---
   const [lang, setLang] = useState<Language>('en');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => 
     window.matchMedia('(prefers-color-scheme: dark)').matches
   );
 
-  // --- Data State ---
-  const [rates, setRates] = useState<ExchangeRates | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // --- Input State ---
-  // We keep track of the active "source" value and which currency it belongs to
-  const [activeValue, setActiveValue] = useState<string>('1');
-  const [activeCode, setActiveCode] = useState<CurrencyCode>('USD');
-
-  const t = useMemo(() => TRANSLATIONS[lang], [lang]);
+  const vm = useCurrencyViewModel(lang);
   const isRtl = lang === 'ar';
 
-  // --- Fetch Data ---
-  const fetchRates = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(API_URL);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data: ExchangeRateApiResponse = await response.json();
-      setRates(data.rates);
-      setLastUpdated(new Date(data.time_last_update_utc).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US'));
-    } catch (err) {
-      setError(t.error);
-    } finally {
-      setLoading(false);
-    }
-  }, [lang, t.error]);
-
-  useEffect(() => {
-    fetchRates();
-  }, [fetchRates]);
-
-  // --- Dark Mode Effect ---
+  // Apply dark mode
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -56,129 +24,118 @@ const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
-  // --- Conversion Logic ---
-  const getConvertedValue = (targetCode: CurrencyCode): string => {
-    if (!rates) return '';
-    if (targetCode === activeCode) return activeValue;
-
-    // Logic: Convert current value back to base (USD), then to target
-    const valueNum = parseFloat(activeValue) || 0;
-    const baseValue = valueNum / (rates[activeCode] || 1);
-    const targetValue = baseValue * (rates[targetCode] || 1);
-
-    if (targetValue === 0) return '';
-    
-    // Format for display: max 4 decimals for precision (IQD has huge numbers, EGP is volatile)
-    return Number(targetValue.toFixed(4)).toString();
-  };
-
-  const handleValueChange = (code: CurrencyCode, value: string) => {
-    setActiveCode(code);
-    setActiveValue(value);
-  };
-
   const toggleLanguage = () => setLang(prev => prev === 'en' ? 'ar' : 'en');
   const toggleDarkMode = () => setIsDarkMode(prev => !prev);
 
   return (
-    <div className={`min-h-screen pb-12 transition-colors ${isRtl ? 'rtl' : 'ltr'}`} dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              {t.title}
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {t.subtitle}
-            </p>
+    <div className={`min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-500 ${isRtl ? 'rtl' : 'ltr'}`} dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* App Bar */}
+      <header className="sticky top-0 z-50 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
+        <div className="max-w-lg mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <TrendingUp className="text-white" size={20} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                {vm.t.title}
+              </h1>
+              <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest">
+                {vm.t.subtitle}
+              </p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button 
               onClick={toggleLanguage}
-              className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors text-slate-600 dark:text-slate-400"
-              title="Change Language"
+              className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90"
             >
-              <Globe size={20} />
+              <Globe size={20} className="text-slate-600 dark:text-slate-400" />
             </button>
             <button 
               onClick={toggleDarkMode}
-              className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors text-slate-600 dark:text-slate-400"
-              title="Toggle Dark Mode"
+              className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all active:scale-90"
             >
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+              {isDarkMode ? (
+                <Sun size={20} className="text-amber-400" />
+              ) : (
+                <Moon size={20} className="text-slate-600" />
+              )}
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-6 mt-8 space-y-6">
-        {/* Status Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-blue-50 dark:bg-blue-900/20 px-6 py-4 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+      <main className="flex-1 max-w-lg mx-auto w-full px-6 py-8 space-y-6">
+        {/* Sync Status Chip */}
+        <div className={`
+          flex items-center justify-between px-5 py-3 rounded-2xl
+          bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm
+        `}>
           <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
-            <span className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-              {loading ? t.loading : `${t.lastUpdated}: ${lastUpdated}`}
-            </span>
+            <div className={`w-2 h-2 rounded-full ${vm.isLoading ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`} />
+            <div className={isRtl ? 'text-right' : 'text-left'}>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">{vm.t.lastUpdated}</p>
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {vm.isLoading ? vm.t.loading : vm.lastUpdated}
+              </p>
+            </div>
           </div>
           <button 
-            onClick={fetchRates}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm text-sm font-bold text-blue-600 dark:text-blue-400 hover:shadow-md transition-all active:scale-95 disabled:opacity-50"
+            onClick={vm.fetchRates}
+            disabled={vm.isLoading}
+            className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl transition-all active:rotate-180 disabled:opacity-30"
           >
-            <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
-            {t.refresh}
+            <RefreshCcw size={18} className={vm.isLoading ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-red-600 dark:text-red-400">
+        {/* Error Feedback */}
+        {vm.error && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl text-red-600 dark:text-red-400 animate-bounce">
             <AlertCircle size={20} />
-            <span className="text-sm font-medium">{error}</span>
+            <span className="text-sm font-bold">{vm.error}</span>
           </div>
         )}
 
-        {/* Currency List */}
-        <div className="grid grid-cols-1 gap-6">
+        {/* Currency Card Stack */}
+        <div className="space-y-4">
           {SUPPORTED_CURRENCIES.map((currency) => (
             <CurrencyCard
               key={currency.code}
               currency={currency}
-              value={getConvertedValue(currency.code)}
-              onChange={(val) => handleValueChange(currency.code, val)}
+              value={vm.convertValue(currency.code)}
+              isActive={vm.activeCode === currency.code}
+              onChange={(val) => vm.handleInputChange(currency.code, val)}
               lang={lang}
             />
           ))}
         </div>
 
-        {/* Info Section */}
-        <section className="mt-12 p-8 bg-slate-100 dark:bg-slate-900/50 rounded-[2.5rem] border border-slate-200 dark:border-slate-800">
-          <h2 className="text-xl font-bold mb-4 text-slate-800 dark:text-slate-100">
-            {lang === 'en' ? 'Quick Information' : 'معلومات سريعة'}
+        {/* Mobile Info Sheet */}
+        <div className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-900 dark:to-black rounded-[2.5rem] text-white shadow-xl">
+          <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+            <TrendingUp size={18} className="text-blue-400" />
+            {isRtl ? 'تحليل السوق' : 'Market Insight'}
           </h2>
-          <div className="space-y-4 text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-            <p>
-              {lang === 'en' 
-                ? 'Rates are sourced from global financial markets and updated every 24 hours. This converter allows real-time calculation across all pairs.' 
-                : 'يتم جلب الأسعار من الأسواق المالية العالمية وتحديثها كل ٢٤ ساعة. يسمح هذا المحول بالحساب المباشر عبر جميع أزواج العملات.'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 text-xs font-semibold">
-                ExchangeRate API V6
-              </span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 text-xs font-semibold">
-                Material Design 3
-              </span>
-            </div>
+          <p className="text-sm text-slate-400 leading-relaxed mb-4">
+            {isRtl 
+              ? 'تعتمد دقة البيانات على ExchangeRate-API. يتم تحديث الأسعار بانتظام لضمان أفضل تجربة تحويل للعملات المتوفرة.' 
+              : 'Precision data provided by ExchangeRate-API. Rates are synchronized regularly to ensure the most accurate conversion experience.'}
+          </p>
+          <div className="flex gap-2">
+            <span className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-tight">Real-time</span>
+            <span className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-tight">MVVM Pattern</span>
           </div>
-        </section>
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto pt-12 text-center text-slate-400 dark:text-slate-600 text-xs font-medium">
-        <p>© {new Date().getFullYear()} ProFX Mobile Web. Built with React & Tailwind.</p>
+      {/* Bottom Padding for Mobile Spacing */}
+      <footer className="py-8 text-center">
+        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+          © {new Date().getFullYear()} Eagle Financial Systems
+        </p>
       </footer>
     </div>
   );
